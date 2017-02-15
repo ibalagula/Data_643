@@ -1,0 +1,189 @@
+---
+title: "Project 1"
+author: "Igor Balagula"
+date: "February 14, 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reshape2)
+library(recommenderlab)
+```
+
+## Objective
+
+The goal of this project is to implement a simple recommender system in two different ways: 1) by creating a custom functions 2)by using an R package. We will be using the collaborative filtering technique in order to find top movie recommendationd for a user based on ratings of similar users. For custom implementation we will use a single nearest user to come up with a list of top recommended movies. 
+
+## Data
+
+The 100K MovieLens dataset of movies will be used. The dataset contains records of 671 users and their ratings of 9066 movies. 
+
+
+Load data
+
+```{r}
+setwd("E:\\Igor\\CUNY\\DATA 643 - Recommender Systems\\Projects\\Project_01\\Data")
+ratings<-read.csv("ratings.csv")
+movies<-read.csv("movies.csv",stringsAsFactors=FALSE)
+```
+
+Review loaded data
+
+```{r}
+head(ratings)
+head(movies)
+```
+
+Remove timestap from ratings dataframe
+
+```{r}
+ratings <- ratings[,c(1,2,3)]
+```
+
+Create ratings matrix. Rows = userId, Columns = movieId
+
+```{r}
+ratingmat <- dcast(ratings, userId~movieId, value.var = "rating", na.rm=FALSE)
+```
+
+Remove userIds in the first column
+
+```{r}
+ratingmat <- as.matrix(ratingmat[,-1]) 
+```
+
+Replace missing ratings with zeros
+
+```{r}
+ratingmat[is.na(ratingmat)]<-0
+```
+
+Create custom function to calculate cosine distance between two vectors
+
+```{r}
+cosineDist <- function(x,y){
+   dist <- x%*%y/(sqrt(x%*%x)*sqrt(y%*%y))
+}
+```
+
+The following function will return a single nearest user that will be used to provide recommendations
+
+```{r}
+get_nearest_user_id <- function(userId){
+   ## calculate similarity vector for a user
+   sim_vec <- numeric(nrow(ratingmat))
+   for (i in 1:nrow(ratingmat)){
+      sim_vec[i] <- as.numeric(cosineDist(ratingmat[1,],ratingmat[i,]))
+   }
+   nearest_user_id <- match(min(sim_vec[sim_vec > 0]),sim_vec)
+}
+```
+
+Let's find the nearest user for 1st user in the dataset
+
+```{r}
+nearest_user_id <- get_nearest_user_id(1)
+```
+
+The following function will return recommended movies for 1st user in the dataset based on ratings of the nearest user.
+
+```{r}
+get_recommendations <- function(m, targetUserId, nearestUserId){
+   v <- numeric(10)
+   target_v <- m[targetUserId,]
+   nearest_v <- m[nearestUserId,] 
+   j<-0
+   for (i in 1:ncol(m)){
+      ## we are selecting movies that were not rated by our target user and are positively rated by a nearest user 
+      if (target_v[i]==0 & nearest_v[i]>4){
+         j<-j+1
+         if (j<=10) {
+            v[j]<-i    
+         } 
+      }
+   } 
+   return (v) 
+}
+```
+
+Organize recommendations in a human-readable format
+
+```{r}
+rec_vec <- get_recommendations(ratingmat, 1,nearest_user_id)
+recom_list <- as(rec_vec, "list") 
+## Convert recommended movieIds to titles
+recom_result <- matrix(0,10)
+for (i in c(1:10)){
+ recom_result[i] <- movies[as.integer(recom_list[[i]][1]),2]
+}
+```
+
+List of top 10 recommendations for 1st user
+
+```{r}
+print (recom_result)
+```
+
+Now we will use recommenderlab package to find recommendations of movies for a user.
+First we will repeat the same data preparation step as in the first case
+
+```{r}
+setwd("E:\\Igor\\CUNY\\DATA 643 - Recommender Systems\\Projects\\Project_01\\Data")
+ratings<-read.csv("ratings.csv")
+movies<-read.csv("movies.csv",stringsAsFactors=FALSE)
+#remove timestap from ratings dataframe
+ratings <- ratings[,c(1,2,3)]
+#create ratings matrix. Rows = userId, Columns = movieId
+ratingmat <- dcast(ratings, userId~movieId, value.var = "rating", na.rm=FALSE)
+#remove userIds in the first column
+ratingmat <- as.matrix(ratingmat[,-1]) 
+```
+
+Convert rating matrix into a recommenderlab sparse matrix
+
+```{r}
+ratingmat <- as(ratingmat, "realRatingMatrix")
+```
+
+Normalize the data
+
+```{r}
+ratingmat_norm <- normalize(ratingmat)
+```
+
+Create Recommender Model. We will be using User-Based Collaborative Filtering
+
+```{r}
+recommender_model <- Recommender(ratingmat_norm, method = "UBCF", param=list(method="Cosine",nn=30))
+```
+
+Now we can use the recommender model created in the previous step to obtain 
+top 10 recommendations for 1st user in dataset
+
+```{r}
+recom <- predict(recommender_model, ratingmat[1], n=10)
+```
+
+Organize recommendations in a human-readable format
+
+```{r}
+## convert recommenderlab object to list
+recom_list <- as(recom, "list") 
+ 
+## Convert recommended movieIds to titles
+recom_result <- matrix(0,10)
+for (i in c(1:10)){
+ recom_result[i] <- movies[as.integer(recom_list[[1]][i]),2]
+}
+```
+
+List of top 10 recommendations for 1st user
+
+```{r}
+print (recom_result)
+```
+
+We can see that our two recommender systems generated a completely different list of recommendations. This is most likely due to the fact that the custom-coded recommended system used a very simple algorithm and recommendation were generated based on a single nearest user data. However this exercise was very helpful in developing an intuition for the algorithms used in UBCF recommender systems and provided good foundation for future work in this class.
