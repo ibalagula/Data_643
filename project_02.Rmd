@@ -1,0 +1,219 @@
+---
+title: "Project 2"
+author: "Igor Balagula"
+date: "February 17, 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reshape2)
+library(recommenderlab)
+library(ggplot2)
+```
+
+## Objective
+
+Take some recommendation data and implement at least two different recommendation algorithms on the data.  For example, content-based, user-user CF, and/or item-item CF. Evaluate different approaches, using different algorithms, normalization techniques, similarity methods, neighborhood sizes, etc.
+
+## Data
+
+The 100K MovieLens dataset of movies will be used. The dataset contains records of 672 users and their ratings of 9066 movies. 
+
+
+Load data
+
+```{r}
+setwd("E:\\Igor\\CUNY\\DATA 643 - Recommender Systems\\Projects\\Project_02\\Data")
+ratings<-read.csv("ratings.csv")
+movies<-read.csv("movies.csv",stringsAsFactors=FALSE)
+```
+
+Review loaded data
+
+```{r}
+head(ratings)
+head(movies)
+```
+
+Remove timestap from ratings dataframe
+
+```{r}
+ratings <- ratings[,c(1,2,3)]
+```
+
+
+
+Create ratings matrix. Rows = userId, Columns = movieId
+
+```{r}
+ratingmat <- dcast(ratings, userId~movieId, value.var = "rating", na.rm=FALSE)
+```
+
+Remove userIds in the first column
+
+```{r}
+ratingmat <- as.matrix(ratingmat[,-1]) 
+```
+
+Convert rating matrix into a recommenderlab sparse matrix
+
+```{r}
+ratingmat <- as(ratingmat, "realRatingMatrix")
+ratingmat
+```
+Let's see how ratings are distributed
+
+```{r}
+vector_ratings <- as.vector(ratingmat@data)
+vector_ratings <- vector_ratings[vector_ratings != 0]
+vector_ratings <- factor(vector_ratings)
+qplot(vector_ratings) + ggtitle("Distribution of the ratings")
+```
+
+The most common rating is 4.
+
+Now let's see how the average ratings for each individual movie are distributed
+
+```{r}
+average_ratings <- colMeans(ratingmat)
+qplot(average_ratings) + stat_bin(binwidth = 0.1) +
+ggtitle("Average movie ratings")
+```
+
+To remove some extreme cases (with very small number of ratings) we will reduce the matrix - select only those movies that were rated 50 or more times and only users who rated 50 or more movies
+
+```{r}
+ratingmat <- ratingmat[rowCounts(ratingmat)>= 50,colCounts(ratingmat)>=50 ]
+ratingmat
+```
+
+Separate data into a training and test data sets (as described in the textbook p.78)
+
+```{r}
+set.seed(1)
+percentage_training <-0.8
+items_to_keep <- 5
+rating_threshold <- 3
+n_eval <- 1
+eval_sets <- evaluationScheme(data=ratingmat, method="split", train=percentage_training, given=items_to_keep,
+goodRating=rating_threshold,k=n_eval)
+eval_sets
+getData(eval_sets, "train")
+```
+
+Now we will evaluate prediction models with different parameters.
+
+1. User-based collaborative filtering; distance method = cosine; normalize= "Z-Score"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "UBCF", param=list(normalize= "Z-Score",method="Cosine",nn=30))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ubcf_cosine_z <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ubcf_cosine_z
+```
+
+2. User-based collaborative filtering; distance method = jaccard; normalize= "Z-Score"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "UBCF", param=list(normalize= "Z-Score",method="jaccard",nn=30))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ubcf_jaccard_z <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ubcf_jaccard_z
+```
+
+3. User-based collaborative filtering; distance method = pearson; normalize= "Z-Score"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "UBCF", param=list(normalize= "Z-Score",method="pearson",nn=30))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ubcf_pearson_z <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ubcf_pearson_z
+```
+
+4. Item-based collaborative filtering; distance method = cosine; normalize= "Z-Score"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "IBCF", param=list(normalize= "Z-Score",method="Cosine"))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ibcf_cosine_z <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ibcf_cosine_z
+```
+
+5. Item-based collaborative filtering; distance method = jaccard; normalize= "Z-Score"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "IBCF", param=list(normalize= "Z-Score",method="jaccard"))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ibcf_jaccard_z <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ibcf_jaccard_z
+```
+
+6. Item-based collaborative filtering; distance method = pearson; normalize= "Z-Score"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "IBCF", param=list(normalize= "Z-Score",method="pearson"))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ibcf_pearson_z <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ibcf_pearson_z
+```
+
+7. User-based collaborative filtering; distance method = cosine; normalize= "center"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "UBCF", param=list(normalize= "center",method="Cosine",nn=30))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ubcf_cosine_c <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ubcf_cosine_c
+```
+
+8. User-based collaborative filtering; distance method = jaccard; normalize= "center"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "UBCF", param=list(normalize= "center",method="jaccard",nn=30))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ubcf_jaccard_c <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ubcf_jaccard_c
+```
+
+9. User-based collaborative filtering; distance method = pearson; normalize= "center"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "UBCF", param=list(normalize= "center",method="pearson",nn=30))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ubcf_pearson_c <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ubcf_pearson_c
+```
+
+10. Item-based collaborative filtering; distance method = cosine; normalize= "center"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "IBCF", param=list(normalize= "center",method="Cosine"))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ibcf_cosine_c <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ibcf_cosine_c
+```
+
+11. Item-based collaborative filtering; distance method = jaccard; normalize= "center"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "IBCF", param=list(normalize= "center",method="jaccard"))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ibcf_jaccard_c <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ibcf_jaccard_c
+```
+
+12. Item-based collaborative filtering; distance method = pearson; normalize= "center"
+
+```{r}
+recommender_model <- Recommender(getData(eval_sets, "train"), method = "IBCF", param=list(normalize= "center",method="pearson"))
+recom <- predict(recommender_model, getData(eval_sets, "known"), type="ratings")
+predict_acc_ibcf_pearson_c <- calcPredictionAccuracy(recom, getData(eval_sets, "unknown"))[1] 
+predict_acc_ibcf_pearson_c
+```
+## Conclusion
+
+Judging by RMSE values User-Based Collaborative Filtering provides more accurate predictions as compared to Item-Based Collaborative Filtering. Among UBCF all of the methods provide similar accuracy of predictions. However Pearson distance coupled with "center" normalization method provides the best prediction accuracy within UBCF.
+
