@@ -1,0 +1,275 @@
+---
+title: "Project 4"
+author: "Igor Balagula"
+date: "March 27, 2017"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reshape2)
+library(recommenderlab)
+library(ggplot2)
+```
+
+## Objective
+
+practice evaluating the performance of recommender systems.
+
+## Data
+
+The 100K MovieLens dataset of movies will be used. The dataset contains records of 672 users and their ratings of 9066 movies. 
+
+
+Load data
+
+```{r}
+setwd("E:\\Igor\\CUNY\\DATA 643 - Recommender Systems\\Projects\\Project_04\\Data")
+ratings<-read.csv("ratings.csv")
+movies<-read.csv("movies.csv",stringsAsFactors=FALSE)
+```
+
+Review loaded data
+
+```{r}
+head(ratings)
+head(movies)
+```
+
+Remove timestap from ratings dataframe
+
+```{r}
+ratings <- ratings[,c(1,2,3)]
+```
+
+
+
+Create ratings matrix. Rows = userId, Columns = movieId
+
+```{r}
+ratingmat <- dcast(ratings, userId~movieId, value.var = "rating", na.rm=FALSE)
+```
+
+Remove userIds in the first column
+
+```{r}
+ratingmat <- as.matrix(ratingmat[,-1]) 
+```
+
+Convert rating matrix into a recommenderlab sparse matrix
+
+```{r}
+ratingmat <- as(ratingmat, "realRatingMatrix")
+ratingmat
+```
+Let's see how ratings are distributed
+
+```{r}
+vector_ratings <- as.vector(ratingmat@data)
+vector_ratings <- vector_ratings[vector_ratings != 0]
+vector_ratings <- factor(vector_ratings)
+qplot(vector_ratings) + ggtitle("Distribution of the ratings")
+```
+
+The most common rating is 4.
+
+Now let's see how the average ratings for each individual movie are distributed
+
+```{r}
+average_ratings <- colMeans(ratingmat)
+qplot(average_ratings) + stat_bin(binwidth = 0.1) +
+ggtitle("Average movie ratings")
+```
+
+To remove some extreme cases (with very small number of ratings) we will reduce the matrix - select only those movies that were rated 50 or more times and only users who rated 50 or more movies
+
+```{r}
+ratingmat <- ratingmat[rowCounts(ratingmat)>= 50,colCounts(ratingmat)>=50 ]
+ratingmat
+```
+
+Separate data into a training and test data sets (as described in the textbook p.78)
+
+```{r}
+set.seed(1)
+percentage_training <-0.8
+items_to_keep <- 5
+rating_threshold <- 3
+n_eval <- 1
+eval_sets <- evaluationScheme(data=ratingmat, method="split", train=percentage_training, given=items_to_keep,
+goodRating=rating_threshold,k=n_eval)
+d<-eval_sets
+getData(eval_sets, "train")
+```
+
+Now we will evaluate prediction models with different parameters.
+First create a function to generate predictions and get RMSE for each method.
+
+```{r}
+predict_by_method <- function(p_data,p_method,p_normalize,p_dist_method,p_n)
+{
+recommender_model <- Recommender(getData(p_data, "train"), p_method, param=list(p_normalize ,p_dist_method,p_n))
+recom <- predict(recommender_model,getData(p_data, "known"), type="ratings")
+predict_acc_ubcf_cosine_z <- calcPredictionAccuracy(recom, getData(p_data, "unknown"))[1] 
+return (predict_acc_ubcf_cosine_z)
+}
+```
+
+1. User-based collaborative filtering; distance method = cosine; normalize= "Z-Score"
+
+```{r}
+predict_acc_ubcf_cosine_z <- predict_by_method(d,"UBCF","Z-Score","Cosine",30)
+print (predict_acc_ubcf_cosine_z)
+```
+
+2. User-based collaborative filtering; distance method = jaccard; normalize= "Z-Score"
+
+```{r}
+predict_acc_ubcf_jaccard_z <- predict_by_method(d,"UBCF","Z-Score","jaccard",30)
+print (predict_acc_ubcf_jaccard_z)
+```
+
+3. User-based collaborative filtering; distance method = pearson; normalize= "Z-Score"
+
+```{r}
+predict_acc_ubcf_pearson_z <- predict_by_method(d,"UBCF","Z-Score","pearson",30)
+print (predict_acc_ubcf_pearson_z)
+```
+
+4. Item-based collaborative filtering; distance method = cosine; normalize= "Z-Score"
+
+```{r}
+predict_acc_ibcf_cosine_z <- predict_by_method(d,"IBCF","Z-Score","cosine",30)
+print (predict_acc_ibcf_cosine_z)
+```
+
+5. Item-based collaborative filtering; distance method = jaccard; normalize= "Z-Score"
+
+```{r}
+predict_acc_ibcf_jaccard_z <- predict_by_method(d,"IBCF","Z-Score","jaccard",30)
+print (predict_acc_ibcf_jaccard_z)
+```
+
+6. Item-based collaborative filtering; distance method = pearson; normalize= "Z-Score"
+
+```{r}
+predict_acc_ibcf_pearson_z <- predict_by_method(d,"IBCF","Z-Score","pearson",30)
+print (predict_acc_ibcf_pearson_z)
+```
+
+7. User-based collaborative filtering; distance method = cosine; normalize= "center"
+
+```{r}
+predict_acc_ubcf_cosine_c <- predict_by_method(d,"UBCF","center","Cosine",30)
+print (predict_acc_ubcf_cosine_c)
+```
+
+8. User-based collaborative filtering; distance method = jaccard; normalize= "center"
+
+```{r}
+predict_acc_ubcf_jaccard_c <- predict_by_method(d,"UBCF","center","jaccard",30)
+print (predict_acc_ubcf_jaccard_c)
+```
+
+9. User-based collaborative filtering; distance method = pearson; normalize= "center"
+
+```{r}
+predict_acc_ubcf_pearson_c <- predict_by_method(d,"UBCF","center","pearson",30)
+print (predict_acc_ubcf_pearson_c)
+```
+
+10. Item-based collaborative filtering; distance method = cosine; normalize= "center"
+
+```{r}
+predict_acc_ibcf_cosine_c <- predict_by_method(d,"IBCF","center","cosine",30)
+print (predict_acc_ibcf_cosine_c)
+```
+
+11. Item-based collaborative filtering; distance method = jaccard; normalize= "center"
+
+```{r}
+predict_acc_ibcf_jaccard_c <- predict_by_method(d,"IBCF","center","jaccard",30)
+print (predict_acc_ibcf_jaccard_c)
+```
+
+12. Item-based collaborative filtering; distance method = pearson; normalize= "center"
+
+```{r}
+predict_acc_ibcf_pearson_c <- predict_by_method(d,"IBCF","center","pearson",30)
+print (predict_acc_ibcf_pearson_c)
+```
+
+Generate ROC and precision/recall curves for UBCF algorithms
+
+```{r}
+eval_ubcf_list <- list(
+  "Center_Cosine" = list(name="UBCF", param=list(normalize = "center",
+                                         method="Cosine",
+                                         nn=30)),
+  "Z-score_Cosine" = list(name="UBCF", param=list(normalize = "Z-score",
+                                         method="Cosine",
+                                         nn=30)),
+  "Center_jaccard" = list(name="UBCF", param=list(normalize = "center",
+                                         method="jaccard",
+                                         nn=30)),
+  "Z-score_jaccard" = list(name="UBCF", param=list(normalize = "Z-score",
+                                         method="jaccard",
+                                         nn=30)),
+  "Center_pearson" = list(name="UBCF", param=list(normalize = "center",
+                                         method="pearson",
+                                         nn=30)),
+  "Z-score_pearson" = list(name="UBCF", param=list(normalize = "Z-score",
+                                         method="pearson",
+                                         nn=30))
+)
+number_of_recomm <- c(1,5, 10, 15, 20, 25)
+eval_ubcf <- evaluate(d, eval_ubcf_list , n = number_of_recomm , progress = FALSE)
+plot(x = eval_ubcf, y = "ROC", annotate = 4)
+plot(x = eval_ubcf, y = "prec/rec", annotate = 5)
+```
+
+
+Generate ROC and precision/recall curves for IBCF algorithms
+
+```{r}
+eval_ibcf_list <- list(
+  "Center_Cosine" = list(name="IBCF", param=list(normalize = "center",
+                                         method="Cosine",
+                                         k=10)),
+  "Z-score_Cosine" = list(name="IBCF", param=list(normalize = "Z-score",
+                                         method="Cosine",
+                                         k=10)),
+  "Center_jaccard" = list(name="IBCF", param=list(normalize = "center",
+                                         method="jaccard",
+                                         k=10)),
+  "Z-score_jaccard" = list(name="IBCF", param=list(normalize = "Z-score",
+                                         method="jaccard",
+                                         k=10)),
+  "Center_pearson" = list(name="IBCF", param=list(normalize = "center",
+                                         method="pearson",
+                                         k=10)),
+  "Z-score_pearson" = list(name="IBCF", param=list(normalize = "Z-score",
+                                         method="pearson",
+                                         k=10))
+)
+
+eval_ibcf <- evaluate(d, eval_ibcf_list , n = number_of_recomm , progress = FALSE)
+plot(x = eval_ibcf, y = "ROC", annotate = 4)
+plot(x = eval_ibcf, y = "prec/rec", annotate = 5)
+```
+
+## Conclusion
+
+By analyzing ROC and precision/recall curves we can draw the following conclusions:
+
+- User-based collaborative filtering provides better predictions as compared to the item-based collaborative filtering
+
+- Within UBCF the best predictions are generated by a combination of "jaccard" distance method with the Z-score normalization method.
+
+- RMSE value for "jaccard" Z-score UBCF is 0.958853 is one of the equally-low values among UBCF algorithms and is lower than any RMSE values generated by any IBCF algorithm.
+
+In conclusion the UBCF algorithm utilizing "jaccard" distance method and Z-score normalization provides the best prediction accuracy.
+
